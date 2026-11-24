@@ -1,0 +1,85 @@
+name: Results graphics
+
+on:
+  workflow_dispatch:
+    inputs:
+      num:
+        description: 'Cup number (example: 26)'
+        required: true
+      tourney:
+        description: 'Lichess tournament id or link (fills p1-p3 and date). Never the entry code'
+        required: false
+      date:
+        description: 'Cup date YYYY-MM-DD (Friday). Optional if tourney is filled'
+        required: false
+      p1:
+        description: '1st place username (optional if tourney is filled)'
+        required: false
+      p2:
+        description: '2nd place username (optional if tourney is filled)'
+        required: false
+      p3:
+        description: '3rd place username (optional if tourney is filled)'
+        required: false
+      pts1:
+        description: 'Club points for 1st (default 10)'
+        required: false
+      pts2:
+        description: 'Club points for 2nd (default 5)'
+        required: false
+      pts3:
+        description: 'Club points for 3rd (default 3)'
+        required: false
+
+jobs:
+  make-graphics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install fonts and icons
+        run: npm install --no-save @fontsource/cairo@5.3.0 @fontsource/playfair-display@5.3.0 simple-icons@16.37.0
+
+      - name: Install Playwright
+        run: |
+          pip install playwright==1.64.0
+          playwright install --with-deps chromium
+
+      - name: Make the graphics
+        env:
+          NUM: ${{ inputs.num }}
+          TOURNEY: ${{ inputs.tourney }}
+          DATE: ${{ inputs.date }}
+          P1: ${{ inputs.p1 }}
+          P2: ${{ inputs.p2 }}
+          P3: ${{ inputs.p3 }}
+          PTS1: ${{ inputs.pts1 }}
+          PTS2: ${{ inputs.pts2 }}
+          PTS3: ${{ inputs.pts3 }}
+        run: |
+          args=(--num "$NUM" --logo logo.png --out out)
+          [ -n "$TOURNEY" ] && args+=(--tourney "$TOURNEY")
+          [ -n "$DATE" ] && args+=(--date "$DATE")
+          [ -n "$P1" ] && args+=(--p1 "$P1")
+          [ -n "$P2" ] && args+=(--p2 "$P2")
+          [ -n "$P3" ] && args+=(--p3 "$P3")
+          [ -n "$PTS1" ] && args+=(--pts1 "$PTS1")
+          [ -n "$PTS2" ] && args+=(--pts2 "$PTS2")
+          [ -n "$PTS3" ] && args+=(--pts3 "$PTS3")
+          python3 results_graphic.py "${args[@]}"
+
+      - name: Save the images
+        uses: actions/upload-artifact@v4
+        with:
+          name: cup-${{ inputs.num }}-graphics
+          path: out/*.png
+          if-no-files-found: error
