@@ -77,6 +77,38 @@ jobs:
           [ -n "$PTS3" ] && args+=(--pts3 "$PTS3")
           python3 results_graphic.py "${args[@]}"
 
+      - name: Email the images to Akram
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          NUM: ${{ inputs.num }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$GMAIL_USER" ] || [ -z "$GMAIL_APP_PASSWORD" ]; then
+            echo "No email secrets set: skipping the email step (images are still in Artifacts)."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import os, smtplib, glob
+          from email.message import EmailMessage
+          user = os.environ['GMAIL_USER']
+          msg = EmailMessage()
+          msg['Subject'] = 'DZ Chess Club - Cup ' + os.environ['NUM'] + ' graphics (3 images)'
+          msg['From'] = user
+          msg['To'] = user
+          msg.set_content('The 3 images for Cup ' + os.environ['NUM'] + ' are attached.\nRun page: ' + os.environ['RUN_URL'] + '\n')
+          files = sorted(glob.glob('out/*.png'))
+          if not files:
+              raise SystemExit('ERROR: no images to email')
+          for f in files:
+              with open(f, 'rb') as fh:
+                  msg.add_attachment(fh.read(), maintype='image', subtype='png', filename=os.path.basename(f))
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=60) as s:
+              s.login(user, os.environ['GMAIL_APP_PASSWORD'])
+              s.send_message(msg)
+          print('Email sent to', user, 'with', len(files), 'images')
+          PY
+
       - name: Save the images
         uses: actions/upload-artifact@v4
         with:
